@@ -1,0 +1,12 @@
+1. After 10-15 users, nutritionist's cap is capped. Nutritionist won't be displayed.
+2. User history upto 3 months, select
+3. VIEWS
+4. Nutritonist is displayed user history, generates report
+
+
+USERemails AND PASSWORDS:
+sarahalex@gmail.com     abc123
+
+
+NUTRITIONISTemails and PASSWORDS
+sophiaann@gmail.com     soph123
