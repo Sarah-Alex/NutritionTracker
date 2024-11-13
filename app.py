@@ -1,8 +1,10 @@
 from common_imports import *
 from user_dashboard import user_dashboard
+from nutritionist_dashboard import nutritionist_dashboard
 from utils import create_connection, hash_password
 
-# Reset session state for form fields
+
+# Reset session state for form fields 
 def reset_form_fields():
     for key in ["email", "password", "first_name", "last_name", "username", "dob", "gender", "height", "weight"]:
         if key in st.session_state:
@@ -54,26 +56,38 @@ def register_user(role, email, password, first_name, last_name, **kwargs):
             cursor.close()
             conn.close()
 
-# Login function
+
+# Login function 
 def login_user(role, email, password):
     try:
         conn = create_connection()
         cursor = conn.cursor(dictionary=True)
         
+        # Check credentials based on the role
         if role == "User":
             cursor.execute("SELECT * FROM Users WHERE UserEmail = %s AND Password = %s", (email, hash_password(password)))
-        else:
+        elif role == "Nutritionist":
             cursor.execute("SELECT * FROM Nutritionists WHERE NutritionistEmail = %s AND Password = %s", (email, hash_password(password)))
         
         user = cursor.fetchone()
+        
         if user:
             st.session_state['logged_in'] = True
             st.session_state['user_role'] = role
             st.session_state['user_email'] = email
             st.session_state['user_data'] = user
+            
+            # Store the nutritionist email separately in session state (for nutritionists)
+            if role == "Nutritionist":
+                st.session_state["nutritionist_email"] = email
+            
+            # Redirect to the dashboard page
             st.session_state['current_page'] = 'dashboard'
             st.rerun()
-        return user
+        else:
+            st.error("Invalid email or password.")
+            return None
+        
     except Error as e:
         st.error(f"Error: {e}")
         return None
@@ -81,6 +95,7 @@ def login_user(role, email, password):
         if conn.is_connected():
             cursor.close()
             conn.close()
+
 
 def show_login_page():
     st.title("Nutrition Tracker Login")
@@ -153,9 +168,11 @@ def main():
     else:
         if st.session_state['user_role'] == "User":
             user_dashboard()
+        elif st.session_state['user_role'] == 'Nutritionist':
+            nutritionist_dashboard()
         else:
-            st.title("Nutritionist Dashboard")
-            st.write("Nutritionist dashboard functionality coming soon...")
+            st.title("something went wrong")
+            
 
 if __name__ == "__main__":
     main()

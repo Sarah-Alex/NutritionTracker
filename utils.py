@@ -34,3 +34,32 @@ def fetch_user_data():
         if conn.is_connected():
             cursor.close()
             conn.close()
+            
+            
+def fetch_name(email, table_name, email_column):
+    try:
+        conn = create_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Use the provided table name and email column to dynamically build the query
+        query = f"SELECT FirstName, LastName FROM {table_name} WHERE {email_column} = %s"
+        cursor.execute(query, (email,))
+        
+        result = cursor.fetchone()
+        if result:
+            st.session_state["first_name"] = result["FirstName"]
+            st.session_state["last_name"] = result["LastName"]
+    except Error as e:
+        st.error(f"Error fetching name: {e}")
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
+            
+def display_greeting():
+    first_name = st.session_state.get("first_name")
+    last_name = st.session_state.get("last_name")
+    if first_name and last_name:
+        st.header(f"Hello {first_name} {last_name}!")
+    else:
+        st.header("Hello!")
