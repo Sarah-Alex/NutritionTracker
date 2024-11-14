@@ -122,46 +122,6 @@ def fetch_nutritionists():
             cursor.close()
             conn.close()
 
-# Assign selected nutritionist to the user
-def assign_nutritionist(nutritionist_email):
-    try:
-        user_email = st.session_state.get('user_email')
-        if not user_email:
-            st.error("You are not logged in. Please log in to choose a nutritionist.")
-            return
-
-        conn = create_connection()
-        cursor = conn.cursor()
-        # Insert or update the nutritionist assignment
-        cursor.execute("""
-            INSERT INTO NutritionistUserMapping (UserEmail, NutritionistEmail)
-            VALUES (%s, %s)
-            ON DUPLICATE KEY UPDATE NutritionistEmail = %s
-        """, (user_email, nutritionist_email, nutritionist_email))
-        conn.commit()
-        st.success("Nutritionist assigned successfully!")
-    except Error as e:
-        st.error(f"Error assigning nutritionist: {e}")
-    finally:
-        if conn.is_connected():
-            cursor.close()
-            conn.close()
-
-# Display option to select a nutritionist
-def display_choose_nutritionist():
-    st.title("Choose Your Nutritionist")
-    nutritionists = fetch_nutritionists()
-    
-    if nutritionists:
-        nutritionist_options = {f"{n['FirstName']} {n['LastName']} ({n['NutritionistEmail']})": n['NutritionistEmail'] for n in nutritionists}
-        selected_nutritionist = st.selectbox("Select a Nutritionist", list(nutritionist_options.keys()), key="main_content_select_nutritionist")
-        
-        if st.button("Assign Nutritionist"):
-            selected_nutritionist_email = nutritionist_options[selected_nutritionist]
-            assign_nutritionist(selected_nutritionist_email)
-    else:
-        st.info("No nutritionists available at this time.")
-
 # Clear main content when a new option is selected
 def clear_main_content():
     for key in st.session_state.keys():
@@ -274,10 +234,7 @@ def user_dashboard():
         if st.button("View Exercise Logs"):
             st.session_state.page = "view_exercise_logs"
             clear_main_content()
-        if st.button("Choose Nutritionist"):
-            st.session_state.page = "choose_nutritionist"
-            clear_main_content()
-
+        
     if st.session_state.get("page") == "log_meals":
         display_log_meals()
     elif st.session_state.get("page") == "log_exercises":
@@ -286,9 +243,6 @@ def user_dashboard():
         view_meal_logs()
     elif st.session_state.get("page") == "view_exercise_logs":
         view_exercise_logs()
-    elif st.session_state.get("page") == "choose_nutritionist":
-        display_choose_nutritionist()
-
 
 # Run user dashboard if logged in
 if __name__ == '__main()__':

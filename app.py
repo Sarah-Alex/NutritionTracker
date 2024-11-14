@@ -25,9 +25,7 @@ def register_user(role, email, password, first_name, last_name, **kwargs):
         # Check if email already exists
         if role == "User":
             cursor.execute("SELECT * FROM Users WHERE UserEmail = %s", (email,))
-        else:
-            cursor.execute("SELECT * FROM Nutritionists WHERE NutritionistEmail = %s", (email,))
-        
+      
         if cursor.fetchone():
             st.error("An account with this email already exists!")
             return False
@@ -38,12 +36,7 @@ def register_user(role, email, password, first_name, last_name, **kwargs):
                 INSERT INTO Users (Username, Password, UserEmail, FirstName, LastName, DOB, Gender, Height, Weight)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
             """, (kwargs['username'], hash_password(password), email, first_name, last_name, kwargs['dob'], kwargs['gender'], kwargs['height'], kwargs['weight']))
-        else:
-            cursor.execute("""
-                INSERT INTO Nutritionists (FirstName, LastName, NutritionistEmail, Password)
-                VALUES (%s, %s, %s, %s)
-            """, (first_name, last_name, email, hash_password(password)))
-        
+      
         conn.commit()
         st.success(f"{role} registered successfully! Please log in.")
         st.session_state['current_page'] = 'login'
@@ -117,7 +110,7 @@ def show_login_page():
 def show_register_page():
     st.title("Nutrition Tracker Registration")
     
-    role = st.selectbox("I am a", ["User", "Nutritionist"], key="role")
+    role = st.selectbox("I am a", ["User"], key="role")
     email = st.text_input("Email", key="email")
     password = st.text_input("Password", type="password", key="password")
     first_name = st.text_input("First Name", key="first_name")
@@ -137,9 +130,6 @@ def show_register_page():
                 if register_user("User", email, password, first_name, last_name, 
                                username=username, dob=dob, gender=gender, 
                                height=height, weight=weight):
-                    reset_form_fields()
-            else:
-                if register_user("Nutritionist", email, password, first_name, last_name):
                     reset_form_fields()
     
     with col2:
