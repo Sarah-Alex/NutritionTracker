@@ -108,25 +108,60 @@ def fetch_exercise_logs(date=None):
     return exercise_logs
 
 
-def fetch_nutritionists():
+# def fetch_nutritionists():
+#     try:
+#         conn = create_connection()
+#         cursor = conn.cursor(dictionary=True)
+#         cursor.execute("SELECT * FROM Nutritionists")
+#         nutritionists = cursor.fetchall()
+#         return nutritionists
+#     except Error as e:
+#         st.error(f"Error fetching nutritionists: {e}")
+#     finally:
+#         if conn.is_connected():
+#             cursor.close()
+#             conn.close()
+def fetch_user_nutritionist():
     try:
+        user_email = st.session_state.get('user_email')
+        if not user_email:
+            st.error("You are not logged in.")
+            return
+
         conn = create_connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM Nutritionists")
-        nutritionists = cursor.fetchall()
-        return nutritionists
+        cursor.execute("""
+            SELECT n.FirstName, n.LastName, n.NutritionistEmail 
+            FROM Nutritionists n 
+            JOIN NutritionistUserMapping m ON n.NutritionistEmail = m.NutritionistEmail
+            WHERE m.UserEmail = %s
+        """, (user_email,))
+        nutritionist = cursor.fetchone()
+        return nutritionist
     except Error as e:
-        st.error(f"Error fetching nutritionists: {e}")
+        st.error(f"Error fetching nutritionist details: {e}")
     finally:
         if conn.is_connected():
             cursor.close()
             conn.close()
+
 
 # Clear main content when a new option is selected
 def clear_main_content():
     for key in st.session_state.keys():
         if key.startswith("main_content"):
             del st.session_state[key]
+
+def display_nutritionist_details():
+    st.title("Nutritionist Details")
+    nutritionist = fetch_user_nutritionist()
+    
+    if nutritionist:
+        greeting = f"Hello, I'm {nutritionist['FirstName']} {nutritionist['LastName']}, your nutritionist. You can reach out to me at {nutritionist['NutritionistEmail']}."
+        st.write(greeting)
+    else:
+        st.info("No nutritionist assigned. Please contact support for assistance.")
+
 
 
 # Function to log meals with multiple items per meal
@@ -234,6 +269,9 @@ def user_dashboard():
         if st.button("View Exercise Logs"):
             st.session_state.page = "view_exercise_logs"
             clear_main_content()
+        if st.button("Nutritionist Details"):
+            st.session_state.page = "nutritionist_details"
+            clear_main_content()
         
     if st.session_state.get("page") == "log_meals":
         display_log_meals()
@@ -243,6 +281,8 @@ def user_dashboard():
         view_meal_logs()
     elif st.session_state.get("page") == "view_exercise_logs":
         view_exercise_logs()
+    elif st.session_state.get("page") == "nutritionist_details":
+        display_nutritionist_details()
 
 # Run user dashboard if logged in
 if __name__ == '__main()__':
