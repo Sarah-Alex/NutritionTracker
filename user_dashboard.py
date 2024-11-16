@@ -107,27 +107,51 @@ def fetch_exercise_logs(date=None):
     connection.close()
     return exercise_logs
 
-
-def fetch_nutritionists():
+# Fetch reports for the logged-in user
+def fetch_reports():
     try:
+        user_email = st.session_state.get("user_email")
+        if not user_email:
+            st.error("You are not logged in. Please log in to view reports.")
+            return []
+
         conn = create_connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM Nutritionists")
-        nutritionists = cursor.fetchall()
-        return nutritionists
+        cursor.execute("""
+            SELECT Recommendation, Date
+            FROM Reports
+            WHERE UserEmail = %s
+            ORDER BY Date DESC
+        """, (user_email,))
+        reports = cursor.fetchall()
+        return reports
     except Error as e:
-        st.error(f"Error fetching nutritionists: {e}")
+        st.error(f"Error fetching reports: {e}")
+        return []
     finally:
         if conn.is_connected():
             cursor.close()
             conn.close()
+            
+# def fetch_nutritionists():
+#     try:
+#         conn = create_connection()
+#         cursor = conn.cursor(dictionary=True)
+#         cursor.execute("SELECT * FROM Nutritionists")
+#         nutritionists = cursor.fetchall()
+#         return nutritionists
+#     except Error as e:
+#         st.error(f"Error fetching nutritionists: {e}")
+#     finally:
+#         if conn.is_connected():
+#             cursor.close()
+#             conn.close()
 
 # Clear main content when a new option is selected
 def clear_main_content():
     for key in st.session_state.keys():
         if key.startswith("main_content"):
             del st.session_state[key]
-
 
 # Function to log meals with multiple items per meal
 def display_log_meals():
@@ -211,6 +235,17 @@ def view_exercise_logs():
     else:
         st.info("No exercise logs found.")
 
+# View reports left by the nutritionist for the user
+def view_reports():
+    st.title("Your Reports")
+    reports = fetch_reports()
+    if reports:
+        for report in reports:
+            st.write(f"Date: {report['Date']}, Recommendation: {report['Recommendation']}")
+    else:
+        st.info("No reports available.")
+            
+
 # Main user dashboard with sidebar options
 def user_dashboard():
     if "first_name" not in st.session_state or "last_name" not in st.session_state:
@@ -234,6 +269,9 @@ def user_dashboard():
         if st.button("View Exercise Logs"):
             st.session_state.page = "view_exercise_logs"
             clear_main_content()
+        if st.button("View Reports"):  # New button to view reports
+            st.session_state.page = "view_reports"
+            clear_main_content()
         
     if st.session_state.get("page") == "log_meals":
         display_log_meals()
@@ -243,6 +281,8 @@ def user_dashboard():
         view_meal_logs()
     elif st.session_state.get("page") == "view_exercise_logs":
         view_exercise_logs()
+    elif st.session_state.get("page") == "view_reports":  # Show reports if selected
+        view_reports()
 
 # Run user dashboard if logged in
 if __name__ == '__main()__':
