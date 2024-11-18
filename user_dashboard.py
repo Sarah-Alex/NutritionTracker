@@ -178,7 +178,7 @@ def display_log_meals():
         selected_food = st.session_state[f"main_content_food_{len(st.session_state['main_content_food_logs'])}_name"]
         quantity = st.session_state[f"main_content_food_{len(st.session_state['main_content_food_logs'])}_quantity"]
         food_id, calories_per_gram = food_options[selected_food]
-        calories = quantity * calories_per_gram
+        calories = (quantity/100) * calories_per_gram
         st.session_state["main_content_food_logs"].append((meal_type, food_id, quantity, calories))
 
     for i, (meal_type, food_id, quantity, calories) in enumerate(st.session_state["main_content_food_logs"]):
