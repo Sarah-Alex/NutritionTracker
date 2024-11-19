@@ -8,7 +8,7 @@ def create_connection():
     return mysql.connector.connect(
         host="localhost",
         user="root",
-        password="2910",
+        password="i know it",
         database="NutritionTracker"
     )
 
