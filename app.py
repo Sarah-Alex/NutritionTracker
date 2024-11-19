@@ -99,9 +99,12 @@ def show_login_page():
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Login"):
-            user = login_user(role, email, password)
-            if not user:
-                st.error("Invalid email or password.")
+            if not email or not password:
+                st.error("All fields are required!")
+            else:
+                user = login_user(role, email, password)
+                if not user:
+                    st.error("Invalid email or password.")
     with col2:
         if st.button("Go to Register"):
             st.session_state['current_page'] = 'register'
@@ -126,7 +129,9 @@ def show_register_page():
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Register"):
-            if role == "User":
+            if not all([email, password, first_name, last_name, username, dob, gender, height, weight]):
+                st.error("All fields are required!")
+            else:
                 if register_user("User", email, password, first_name, last_name, 
                                username=username, dob=dob, gender=gender, 
                                height=height, weight=weight):
