@@ -79,33 +79,74 @@ def save_workout_log(exercise_id, duration, date):
 
 # Fetch meal logs with optional filtering by meal type
 def fetch_meal_logs(meal_type=None):
-    connection = create_connection()
-    cursor = connection.cursor(dictionary=True)
-    query = "SELECT * FROM User_Eats JOIN Food_Items ON User_Eats.ItemID = Food_Items.ItemID"
-    if meal_type:
-        query += " WHERE MealType = %s"
-        cursor.execute(query, (meal_type,))
-    else:
-        cursor.execute(query)
-    meal_logs = cursor.fetchall()
-    cursor.close()
-    connection.close()
-    return meal_logs
+    try:
+        user_email = st.session_state.get("user_email")
+        if not user_email:
+            st.error("You are not logged in. Please log in to view your meal logs.")
+            return []
+
+        conn = create_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Base query to fetch meal logs for the logged-in user
+        query = """
+            SELECT User_Eats.Date, User_Eats.MealType, Food_Items.ItemName, User_Eats.Quantity, Food_Items.Calories
+            FROM User_Eats 
+            JOIN Food_Items ON User_Eats.ItemID = Food_Items.ItemID
+            WHERE User_Eats.UserEmail = %s
+        """
+        
+        # Add filter for meal type if provided
+        if meal_type:
+            query += " AND User_Eats.MealType = %s"
+            cursor.execute(query, (user_email, meal_type))
+        else:
+            cursor.execute(query, (user_email,))
+        
+        meal_logs = cursor.fetchall()
+        return meal_logs
+    except Error as e:
+        st.error(f"Error fetching meal logs: {e}")
+        return []
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
 
 # Fetch exercise logs with optional filtering by date
 def fetch_exercise_logs(date=None):
-    connection = create_connection()
-    cursor = connection.cursor(dictionary=True)
-    query = "SELECT * FROM Workouts JOIN Exercises ON Workouts.ExerciseID = Exercises.ExerciseID"
-    if date:
-        query += " WHERE Date = %s"
-        cursor.execute(query, (date,))
-    else:
-        cursor.execute(query)
-    exercise_logs = cursor.fetchall()
-    cursor.close()
-    connection.close()
-    return exercise_logs
+    try:
+        user_email = st.session_state.get("user_email")
+        if not user_email:
+            st.error("You are not logged in. Please log in to view your exercise logs.")
+            return []
+
+        conn = create_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Query to fetch exercise logs for the logged-in user
+        query = """
+            SELECT Workouts.Date, Exercises.ExerciseName, Workouts.Duration, 
+                   (Exercises.CaloriesBurnt * Workouts.Duration)/100 AS CaloriesBurned
+            FROM Workouts
+            JOIN Exercises ON Workouts.ExerciseID = Exercises.ExerciseID
+            WHERE Workouts.UserEmail = %s
+        """
+        if date:
+            query += " AND Workouts.Date = %s"
+            cursor.execute(query, (user_email, date))
+        else:
+            cursor.execute(query, (user_email,))
+        
+        exercise_logs = cursor.fetchall()
+        return exercise_logs
+    except Error as e:
+        st.error(f"Error fetching exercise logs: {e}")
+        return []
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
 
 
 def fetch_nutritionists():
@@ -142,6 +183,33 @@ def fetch_reports():
         return reports
     except Error as e:
         st.error(f"Error fetching reports: {e}")
+        return []
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
+            
+# fetch user supplements
+def fetch_supplements():
+    try:
+        user_email = st.session_state.get("user_email")
+        if not user_email:
+            st.error("You are not logged in. Please log in to view your supplements.")
+            return []
+        
+        conn = create_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT  s.SupplementName, s.Description, u.StartDate 
+            FROM Supplements as s, user_supplements as u 
+            WHERE u.SupplementID = s.SupplementID and u.UserEmail = %s
+            ORDER BY u.StartDate DESC;
+        """, (user_email,))
+        
+        supplements = cursor.fetchall()
+        return supplements
+    except Error as e:
+        st.error(f"Error fetching supplements: {e}")
         return []
     finally:
         if conn.is_connected():
@@ -284,7 +352,7 @@ def view_exercise_logs():
     exercise_logs = fetch_exercise_logs(date_filter)
     if exercise_logs:
         for log in exercise_logs:
-            st.write(f"Date: {log['Date']}, Exercise: {log['ExerciseName']}, Duration: {log['Duration']} minutes")
+            st.write(f"Date: {log['Date']}, Exercise: {log['ExerciseName']}, Duration: {log['Duration']} minutes, Calories Burned: {log['CaloriesBurned']}")
     else:
         st.info("No exercise logs found.")
 
@@ -297,6 +365,18 @@ def view_reports():
             st.write(f"Date: {report['Date']}, Recommendation: {report['Recommendation']}")
     else:
         st.info("No reports available.")
+        
+#view supplement suggestions left by the nutritionist for the user
+def view_supplements():
+    st.title("Your Supplements")
+    supplements = fetch_supplements()
+    st.table(data=None)
+    
+    if supplements:
+        for supplement in supplements:
+            st.write(f"Supplement Name: {supplement['SupplementName']}, Description: {supplement['Description']}, Start Date: {supplement['StartDate']}")
+    else:
+        st.info("No supplements suggested.")
             
 
 # Main user dashboard with sidebar options
@@ -325,8 +405,11 @@ def user_dashboard():
         if st.button("Nutritionist Details"):
             st.session_state.page = "nutritionist_details"
             clear_main_content()
-        if st.button("View Reports"):  # New button to view reports
+        if st.button("View Reports"):  # 
             st.session_state.page = "view_reports"
+            clear_main_content()
+        if st.button("View_Supplements"):
+            st.session_state.page = "view_supplements"
             clear_main_content()
             
     if st.session_state.get("page") == "log_meals":
@@ -337,10 +420,12 @@ def user_dashboard():
         view_meal_logs()
     elif st.session_state.get("page") == "view_exercise_logs":
         view_exercise_logs()
-    elif st.session_state.get("page") == "view_reports":  # Show reports if selected
+    elif st.session_state.get("page") == "view_reports": 
         view_reports()
     elif st.session_state.get("page") == "nutritionist_details":
         display_nutritionist_details()
+    elif st.session_state.get("page") == "view_supplements":
+        view_supplements()
 
 # Run user dashboard if logged in
 if __name__ == '__main()__':
