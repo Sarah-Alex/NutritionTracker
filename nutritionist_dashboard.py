@@ -1,7 +1,9 @@
+import streamlit as st
+import datetime as dt
+from mysql.connector import Error
 from common_imports import *
 from utils import create_connection, fetch_name, display_greeting
 
-# Fetch users assigned to the logged-in nutritionist
 def fetch_assigned_users():
     try:
         nutritionist_email = st.session_state.get('user_email')
@@ -25,7 +27,6 @@ def fetch_assigned_users():
             cursor.close()
             conn.close()
 
-# Fetch food intake history for a selected user with filtering options
 def fetch_user_food_logs(user_email, meal_type=None, food_item=None, start_date=None, end_date=None):
     connection = create_connection()
     cursor = connection.cursor(dictionary=True)
@@ -56,7 +57,6 @@ def fetch_user_food_logs(user_email, meal_type=None, food_item=None, start_date=
     connection.close()
     return food_logs
 
-# Fetch exercise history for a selected user with filtering options
 def fetch_user_exercise_logs(user_email, exercise_name=None, start_date=None, end_date=None):
     connection = create_connection()
     cursor = connection.cursor(dictionary=True)
@@ -84,7 +84,6 @@ def fetch_user_exercise_logs(user_email, exercise_name=None, start_date=None, en
     connection.close()
     return exercise_logs
 
-# Save a nutritionist's report or recommendation for a user
 def save_nutritionist_report(user_email, recommendation):
     try:
         conn = create_connection()
@@ -102,7 +101,6 @@ def save_nutritionist_report(user_email, recommendation):
             cursor.close()
             conn.close()
 
-# Suggest a supplement for the selected user
 def suggest_supplement(user_email, supplement_id):
     try:
         conn = create_connection()
@@ -120,7 +118,6 @@ def suggest_supplement(user_email, supplement_id):
             cursor.close()
             conn.close()
 
-# Fetch available supplements
 def fetch_supplements():
     connection = create_connection()
     cursor = connection.cursor(dictionary=True)
@@ -130,7 +127,6 @@ def fetch_supplements():
     connection.close()
     return supplements
 
-# Display food intake history with filtering options
 def display_food_history(user_email):
     st.subheader("View User's Food Intake History")
     meal_type = st.selectbox("Select Meal Type", ['All', 'Breakfast', 'Morning Snack', 'Lunch', 'Evening Snack', 'Dinner'], index=0)
@@ -147,7 +143,6 @@ def display_food_history(user_email):
     else:
         st.info("No food intake records found.")
 
-# Display exercise history with filtering options
 def display_exercise_history(user_email):
     st.subheader("View User's Exercise History")
     exercise_name = st.text_input("Search by Exercise Name", "")
@@ -162,7 +157,6 @@ def display_exercise_history(user_email):
     else:
         st.info("No exercise records found.")
 
-# Main page for viewing assigned users
 def display_assigned_users():
     st.title("View Users Under Your Supervision")
     users = fetch_assigned_users()
@@ -186,29 +180,23 @@ def display_assigned_users():
                 if st.button("Submit Recommendation"):
                     save_nutritionist_report(selected_user_email, recommendation)
 
-# Suggest supplements for the selected user
 def suggest_supplements():
     st.title("Suggest Supplements")
     
-    # Fetch assigned users and let the nutritionist select one
     users = fetch_assigned_users()
     user_emails = [user['UserEmail'] for user in users]
     selected_user = st.selectbox("Select a User", user_emails)
     
-    # Fetch supplements and display both the name and description in the dropdown
     supplements = fetch_supplements()
     supplement_options = {f"{supplement['SupplementName']} - {supplement['Description']}": supplement['SupplementID'] 
                           for supplement in supplements}
     
-    # Dropdown to select supplement with combined name and description
     selected_supplement = st.selectbox("Select a Supplement", list(supplement_options.keys()))
     
-    # Submit suggestion
     if st.button("Suggest Supplement"):
         supplement_id = supplement_options[selected_supplement]
         suggest_supplement(selected_user, supplement_id)
 
-# Main nutritionist dashboard
 def nutritionist_dashboard():
     if "first_name" not in st.session_state or "last_name" not in st.session_state:
         nutritionist_email = st.session_state.get("nutritionist_email")
@@ -218,14 +206,14 @@ def nutritionist_dashboard():
             st.error("Nutritionist email is not set in session state.")
     
     display_greeting()
-    with st.sidebar:
-        st.header("Nutritionist Navigation")
-        if st.button("View Assigned Users"):
-            st.session_state.page = "view_users"
-        if st.button("Suggest Supplements"):
-            st.session_state.page = "suggest_supplements"
     
-    if st.session_state.get("page") == "view_users":
+    st.sidebar.title("Nutritionist Dashboard")
+    page = st.sidebar.radio("Navigation", ["View Assigned Users", "Suggest Supplements"])
+    
+    if page == "View Assigned Users":
         display_assigned_users()
-    elif st.session_state.get("page") == "suggest_supplements":
+    elif page == "Suggest Supplements":
         suggest_supplements()
+
+if __name__ == "__main__":
+    nutritionist_dashboard()

@@ -12,3 +12,5 @@ shreyasoni@gmaial.com   soni123
 NUTRITIONISTemails and PASSWORDS
 sophiaann@gmail.com     soph123
 sakshimasand@gmail.com  sakshi123
+
+multiply by duration, divide by 60*100

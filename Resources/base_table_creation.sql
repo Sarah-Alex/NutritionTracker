@@ -193,4 +193,3 @@ FROM temp_exercises;
 -- Drop the temporary table after data insertion
 DROP TEMPORARY TABLE IF EXISTS temp_exercises;
 
-
