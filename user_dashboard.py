@@ -1,3 +1,8 @@
+# import streamlit as st
+import datetime as dt
+import pandas as pd
+import plotly.express as px
+from mysql.connector import Error
 from common_imports import *
 from utils import create_connection, fetch_name, display_greeting
 
@@ -77,8 +82,8 @@ def save_workout_log(exercise_id, duration, date):
             cursor.close()
             conn.close()
 
-# Fetch meal logs with optional filtering by meal type
-def fetch_meal_logs(meal_type=None):
+# Fetch meal logs with optional filtering by date range
+def fetch_meal_logs(start_date=None, end_date=None):
     try:
         user_email = st.session_state.get("user_email")
         if not user_email:
@@ -88,21 +93,19 @@ def fetch_meal_logs(meal_type=None):
         conn = create_connection()
         cursor = conn.cursor(dictionary=True)
         
-        # Base query to fetch meal logs for the logged-in user
         query = """
             SELECT User_Eats.Date, User_Eats.MealType, Food_Items.ItemName, User_Eats.Quantity, Food_Items.Calories
             FROM User_Eats 
             JOIN Food_Items ON User_Eats.ItemID = Food_Items.ItemID
             WHERE User_Eats.UserEmail = %s
         """
+        params = [user_email]
         
-        # Add filter for meal type if provided
-        if meal_type:
-            query += " AND User_Eats.MealType = %s"
-            cursor.execute(query, (user_email, meal_type))
-        else:
-            cursor.execute(query, (user_email,))
+        if start_date and end_date:
+            query += " AND User_Eats.Date BETWEEN %s AND %s"
+            params.extend([start_date, end_date])
         
+        cursor.execute(query, params)
         meal_logs = cursor.fetchall()
         return meal_logs
     except Error as e:
@@ -113,8 +116,8 @@ def fetch_meal_logs(meal_type=None):
             cursor.close()
             conn.close()
 
-# Fetch exercise logs with optional filtering by date
-def fetch_exercise_logs(date=None):
+# Fetch exercise logs with optional filtering by date range
+def fetch_exercise_logs(start_date=None, end_date=None):
     try:
         user_email = st.session_state.get("user_email")
         if not user_email:
@@ -124,20 +127,20 @@ def fetch_exercise_logs(date=None):
         conn = create_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # Query to fetch exercise logs for the logged-in user
         query = """
             SELECT Workouts.Date, Exercises.ExerciseName, Workouts.Duration, 
-                   (Exercises.CaloriesBurnt * Workouts.Duration)/100 AS CaloriesBurned
+                   (Exercises.CaloriesBurnt * Workouts.Duration) AS CaloriesBurned
             FROM Workouts
             JOIN Exercises ON Workouts.ExerciseID = Exercises.ExerciseID
             WHERE Workouts.UserEmail = %s
         """
-        if date:
-            query += " AND Workouts.Date = %s"
-            cursor.execute(query, (user_email, date))
-        else:
-            cursor.execute(query, (user_email,))
+        params = [user_email]
         
+        if start_date and end_date:
+            query += " AND Workouts.Date BETWEEN %s AND %s"
+            params.extend([start_date, end_date])
+        
+        cursor.execute(query, params)
         exercise_logs = cursor.fetchall()
         return exercise_logs
     except Error as e:
@@ -148,21 +151,6 @@ def fetch_exercise_logs(date=None):
             cursor.close()
             conn.close()
 
-
-def fetch_nutritionists():
-    try:
-        conn = create_connection()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM Nutritionists")
-        nutritionists = cursor.fetchall()
-        return nutritionists
-    except Error as e:
-        st.error(f"Error fetching nutritionists: {e}")
-    finally:
-        if conn.is_connected():
-            cursor.close()
-            conn.close()
-            
 # Fetch reports for the logged-in user
 def fetch_reports():
     try:
@@ -188,8 +176,8 @@ def fetch_reports():
         if conn.is_connected():
             cursor.close()
             conn.close()
-            
-# fetch user supplements
+
+# Fetch user supplements
 def fetch_supplements():
     try:
         user_email = st.session_state.get("user_email")
@@ -200,7 +188,7 @@ def fetch_supplements():
         conn = create_connection()
         cursor = conn.cursor(dictionary=True)
         cursor.execute("""
-            SELECT  s.SupplementName, s.Description, u.StartDate 
+            SELECT s.SupplementName, s.Description, u.StartDate 
             FROM Supplements as s, user_supplements as u 
             WHERE u.SupplementID = s.SupplementID and u.UserEmail = %s
             ORDER BY u.StartDate DESC;
@@ -215,21 +203,8 @@ def fetch_supplements():
         if conn.is_connected():
             cursor.close()
             conn.close()
-            
-# def fetch_nutritionists():
-#     try:
-#         conn = create_connection()
-#         cursor = conn.cursor(dictionary=True)
-#         cursor.execute("SELECT * FROM Nutritionists")
-#         nutritionists = cursor.fetchall()
-#         return nutritionists
-#     except Error as e:
-#         st.error(f"Error fetching nutritionists: {e}")
-#     finally:
-#         if conn.is_connected():
-#             cursor.close()
-#             conn.close()
 
+# Fetch user's assigned nutritionist
 def fetch_user_nutritionist():
     try:
         user_email = st.session_state.get('user_email')
@@ -254,179 +229,158 @@ def fetch_user_nutritionist():
             cursor.close()
             conn.close()
 
+def display_dashboard_summary():
+    st.title("Dashboard Summary")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Today's Nutrition")
+        today_meals = fetch_meal_logs(start_date=dt.date.today(), end_date=dt.date.today())
+        total_calories = sum(meal['Calories'] * meal['Quantity'] / 100 for meal in today_meals)
+        st.metric("Total Calories Consumed", f"{total_calories:.0f} kcal")
+        
+    
+    with col2:
+        st.subheader("Today's Exercise")
+        today_exercises = fetch_exercise_logs(start_date=dt.date.today(), end_date=dt.date.today())
+        total_calories_burned = sum(exercise['CaloriesBurned'] for exercise in today_exercises)
+        st.metric("Total Calories Burned", f"{total_calories_burned:.0f} kcal")
+        
+        # Bar chart for exercise duration
+        if today_exercises:
+            exercise_df = pd.DataFrame(today_exercises)
+            fig = px.bar(exercise_df, x='ExerciseName', y='Duration', title="Exercise Duration")
+            st.plotly_chart(fig)
+        else:
+            st.info("No exercises logged today.")
 
-# Clear main content when a new option is selected
-def clear_main_content():
-    for key in st.session_state.keys():
-        if key.startswith("main_content"):
-            del st.session_state[key]
-            
+def display_log_meals():
+    st.title("Log Your Meals")
+    meal_type = st.selectbox("Select Meal Type", ["Breakfast", "Morning Snack", "Lunch", "Evening Snack", "Dinner"])
+    food_items = fetch_food_items()
+    
+    selected_foods = st.multiselect("Select Food Items", [item['ItemName'] for item in food_items])
+    
+    log_entries = []
+    for food in selected_foods:
+        food_item = next(item for item in food_items if item['ItemName'] == food)
+        quantity = st.number_input(f"Quantity of {food} (g)", min_value=1, value=100)
+        calories = food_item['Calories'] * quantity / 100
+        log_entries.append((meal_type, food_item['ItemID'], quantity, calories))
+    
+    if st.button("Save Meal Log"):
+        for entry in log_entries:
+            save_food_log(*entry, dt.date.today())
+        st.success("Meal log saved successfully!")
+
+def display_log_exercises():
+    st.title("Log Your Exercises")
+    exercises = fetch_exercises()
+    
+    selected_exercise = st.selectbox("Select Exercise", [ex['ExerciseName'] for ex in exercises])
+    duration = st.number_input("Duration (minutes)", min_value=1, value=30)
+    
+    if st.button("Save Exercise Log"):
+        exercise_id = next(ex['ExerciseID'] for ex in exercises if ex['ExerciseName'] == selected_exercise)
+        save_workout_log(exercise_id, duration, dt.date.today())
+        st.success("Exercise log saved successfully!")
+
+def view_meal_logs():
+    st.title("View Your Meal Logs")
+    date_range = st.date_input("Select Date Range", [dt.date.today() - dt.timedelta(days=7), dt.date.today()])
+    meal_logs = fetch_meal_logs(start_date=date_range[0], end_date=date_range[1])
+    
+    if meal_logs:
+        df = pd.DataFrame(meal_logs)
+        df['Date'] = pd.to_datetime(df['Date'])
+        
+        st.dataframe(df)
+        
+        # Calories per day chart
+        daily_calories = df.groupby('Date')['Calories'].sum().reset_index()
+        fig = px.line(daily_calories, x='Date', y='Calories', title="Daily Calorie Intake")
+        st.plotly_chart(fig)
+    else:
+        st.info("No meal logs found for the selected date range.")
+
+def view_exercise_logs():
+    st.title("View Your Exercise Logs")
+    date_range = st.date_input("Select Date Range", [dt.date.today() - dt.timedelta(days=7), dt.date.today()])
+    exercise_logs = fetch_exercise_logs(start_date=date_range[0], end_date=date_range[1])
+    
+    if exercise_logs:
+        df = pd.DataFrame(exercise_logs)
+        df['Date'] = pd.to_datetime(df['Date'])
+        
+        st.dataframe(df)
+        
+        # Calories burned per day chart
+        daily_calories_burned = df.groupby('Date')['CaloriesBurned'].sum().reset_index()
+        fig = px.line(daily_calories_burned, x='Date', y='CaloriesBurned', title="Daily Calories Burned")
+        st.plotly_chart(fig)
+    else:
+        st.info("No exercise logs found for the selected date range.")
 
 def display_nutritionist_details():
     st.title("Nutritionist Details")
     nutritionist = fetch_user_nutritionist()
     
     if nutritionist:
-        greeting = f"Hello, I'm {nutritionist['FirstName']} {nutritionist['LastName']}, your nutritionist. You can reach out to me at {nutritionist['NutritionistEmail']}."
-        st.write(greeting)
+        st.write(f"Your nutritionist: {nutritionist['FirstName']} {nutritionist['LastName']}")
+        st.write(f"Contact: {nutritionist['NutritionistEmail']}")
     else:
         st.info("No nutritionist assigned. Please contact support for assistance.")
 
-
-
-# Function to log meals with multiple items per meal
-def display_log_meals():
-    st.title("Log Your Meals")
-    meal_type = st.selectbox("Select Meal Type", ["Breakfast", "Morning Snack", "Lunch", "Evening Snack", "Dinner"], key="main_content_meal_type")
-    food_items = fetch_food_items()
-    food_options = {item['ItemName']: (item['ItemID'], item['Calories']) for item in food_items}
-
-    if "main_content_food_logs" not in st.session_state:
-        st.session_state["main_content_food_logs"] = []
-
-    def add_food_item():
-        selected_food = st.session_state[f"main_content_food_{len(st.session_state['main_content_food_logs'])}_name"]
-        quantity = st.session_state[f"main_content_food_{len(st.session_state['main_content_food_logs'])}_quantity"]
-        food_id, calories_per_gram = food_options[selected_food]
-        calories = quantity * calories_per_gram
-        st.session_state["main_content_food_logs"].append((meal_type, food_id, quantity, calories))
-
-    for i, (meal_type, food_id, quantity, calories) in enumerate(st.session_state["main_content_food_logs"]):
-        food_name = next(item for item in food_options if food_options[item][0] == food_id)
-        st.write(f"Item {i + 1}: {quantity}g of {food_name} - {calories} kcal")
-
-    selected_food = st.selectbox("Select Food Item", list(food_options.keys()), key=f"main_content_food_{len(st.session_state['main_content_food_logs'])}_name")
-    quantity = st.number_input("Quantity (g)", min_value=1, key=f"main_content_food_{len(st.session_state['main_content_food_logs'])}_quantity")
-    st.button("Add Food Item", on_click=add_food_item, help="Add new food item to this meal")
-
-    if st.button("Save Meal Log"):
-        for meal_type, food_id, quantity, calories in st.session_state["main_content_food_logs"]:
-            save_food_log(meal_type, food_id, quantity, calories, dt.date.today())
-        st.success("Meal log saved successfully!")
-        st.session_state["main_content_food_logs"] = []
-
-# Function to log exercises with multiple entries
-def display_log_exercises():
-    st.title("Log Your Exercises")
-    exercises = fetch_exercises()
-    exercise_options = {exercise['ExerciseName']: exercise['ExerciseID'] for exercise in exercises}
-
-    if "main_content_exercise_logs" not in st.session_state:
-        st.session_state["main_content_exercise_logs"] = []
-
-    def add_exercise():
-        selected_exercise = st.session_state[f"main_content_exercise_{len(st.session_state['main_content_exercise_logs'])}_name"]
-        duration = st.session_state[f"main_content_exercise_{len(st.session_state['main_content_exercise_logs'])}_duration"]
-        exercise_id = exercise_options[selected_exercise]
-        st.session_state["main_content_exercise_logs"].append((exercise_id, duration))
-
-    for i, (exercise_id, duration) in enumerate(st.session_state["main_content_exercise_logs"]):
-        exercise_name = next(name for name in exercise_options if exercise_options[name] == exercise_id)
-        st.write(f"Exercise {i + 1}: {duration} minutes of {exercise_name}")
-
-    selected_exercise = st.selectbox("Select Exercise", list(exercise_options.keys()), key=f"main_content_exercise_{len(st.session_state['main_content_exercise_logs'])}_name")
-    duration = st.number_input("Duration (minutes)", min_value=1, key=f"main_content_exercise_{len(st.session_state['main_content_exercise_logs'])}_duration")
-    st.button("Add Exercise", on_click=add_exercise, help="Add new exercise")
-
-    if st.button("Save Exercise Log"):
-        for exercise_id, duration in st.session_state["main_content_exercise_logs"]:
-            save_workout_log(exercise_id, duration, dt.date.today())
-        st.success("Exercise log saved successfully!")
-        st.session_state["main_content_exercise_logs"] = []
-
-# Function to view meal logs with optional filtering
-def view_meal_logs():
-    st.title("View Your Meal Logs")
-    meal_type_filter = st.selectbox("Filter by Meal Type", ["All", "Breakfast", "Morning Snack", "Lunch", "Evening Snack", "Dinner"])
-    meal_logs = fetch_meal_logs(meal_type_filter if meal_type_filter != "All" else None)
-    if meal_logs:
-        for log in meal_logs:
-            st.write(f"Date: {log['Date']}, Meal: {log['MealType']}, Food: {log['ItemName']}, Quantity: {log['Quantity']}g, Calories: {log['Calories']} kcal")
-    else:
-        st.info("No meal logs found.")
-
-# Function to view exercise logs with optional date filtering
-def view_exercise_logs():
-    st.title("View Your Exercise Logs")
-    date_filter = st.date_input("Filter by Date", value=dt.date.today())
-    exercise_logs = fetch_exercise_logs(date_filter)
-    if exercise_logs:
-        for log in exercise_logs:
-            st.write(f"Date: {log['Date']}, Exercise: {log['ExerciseName']}, Duration: {log['Duration']} minutes, Calories Burned: {log['CaloriesBurned']}")
-    else:
-        st.info("No exercise logs found.")
-
-# View reports left by the nutritionist for the user
 def view_reports():
     st.title("Your Reports")
     reports = fetch_reports()
     if reports:
         for report in reports:
-            st.write(f"Date: {report['Date']}, Recommendation: {report['Recommendation']}")
+            st.write(f"Date: {report['Date']}")
+            st.write(f"Recommendation: {report['Recommendation']}")
+            st.write("---")
     else:
         st.info("No reports available.")
-        
-#view supplement suggestions left by the nutritionist for the user
+
 def view_supplements():
     st.title("Your Supplements")
     supplements = fetch_supplements()
-    st.table(data=None)
     
     if supplements:
         for supplement in supplements:
-            st.write(f"Supplement Name: {supplement['SupplementName']}, Description: {supplement['Description']}, Start Date: {supplement['StartDate']}")
+            st.write(f"Supplement Name: {supplement['SupplementName']}")
+            st.write(f"Description: {supplement['Description']}")
+            st.write(f"Start Date: {supplement['StartDate']}")
+            st.write("---")
     else:
         st.info("No supplements suggested.")
-            
 
-# Main user dashboard with sidebar options
 def user_dashboard():
     if "first_name" not in st.session_state or "last_name" not in st.session_state:
         user_email = st.session_state.get("user_email")
         if user_email:
             fetch_name(user_email, "Users", "UserEmail")
-    
     display_greeting()
     
-    with st.sidebar:
-        st.header("Navigation")
-        if st.button("Log Meals"):
-            st.session_state.page = "log_meals"
-            clear_main_content()
-        if st.button("Log Exercises"):
-            st.session_state.page = "log_exercises"
-            clear_main_content()
-        if st.button("View Meal Logs"):
-            st.session_state.page = "view_meal_logs"
-            clear_main_content()
-        if st.button("View Exercise Logs"):
-            st.session_state.page = "view_exercise_logs"
-            clear_main_content()
-        if st.button("Nutritionist Details"):
-            st.session_state.page = "nutritionist_details"
-            clear_main_content()
-        if st.button("View Reports"):  # 
-            st.session_state.page = "view_reports"
-            clear_main_content()
-        if st.button("View_Supplements"):
-            st.session_state.page = "view_supplements"
-            clear_main_content()
-            
-    if st.session_state.get("page") == "log_meals":
+    st.sidebar.title("Navigation")
+    page = st.sidebar.radio("Go to", ["Dashboard", "Log Meals", "Log Exercises", "View Meal Logs", "View Exercise Logs", "Nutritionist Details", "View Reports", "View Supplements"])
+    
+    if page == "Dashboard":
+        display_dashboard_summary()
+    elif page == "Log Meals":
         display_log_meals()
-    elif st.session_state.get("page") == "log_exercises":
+    elif page == "Log Exercises":
         display_log_exercises()
-    elif st.session_state.get("page") == "view_meal_logs":
+    elif page == "View Meal Logs":
         view_meal_logs()
-    elif st.session_state.get("page") == "view_exercise_logs":
+    elif page == "View Exercise Logs":
         view_exercise_logs()
-    elif st.session_state.get("page") == "view_reports": 
-        view_reports()
-    elif st.session_state.get("page") == "nutritionist_details":
+    elif page == "Nutritionist Details":
         display_nutritionist_details()
-    elif st.session_state.get("page") == "view_supplements":
+    elif page == "View Reports":
+        view_reports()
+    elif page == "View Supplements":
         view_supplements()
 
-# Run user dashboard if logged in
-if __name__ == '__main()__':
+if __name__ == '__main__':
     user_dashboard()
